@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Parametric 3D Printable Lampshade Studio</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <style>
+    :root {
+      --bg: #121316;
+      --panel: #1e2026;
+      --accent: #f59e0b;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { display: flex; height: 100vh; background: var(--bg); color: var(--text); overflow: hidden; }
+    #sidebar {
+      width: 350px; background: var(--panel); padding: 20px; overflow-y: auto;
+      border-right: 1px solid #2e323b; display: flex; flex-direction: column; gap: 16px;
+    }
+    h1 { font-size: 1.25rem; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px; }
+    .section-title {
+      font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--accent); font-weight: 700; border-bottom: 1px solid #2e323b; padding-bottom: 6px; margin-top: 4px;
+    }
+    .control-group { display: flex; flex-direction: column; gap: 5px; }
+    .control-header { display: flex; justify-content: space-between; font-size: 0.85rem; }
+    .val { color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
+    input[type="range"] {
+      width: 100%; accent-color: var(--accent); cursor: pointer; height: 6px; background: #2e323b; border-radius: 4px;
+    }
+    select, button {
+      width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid #3f4451;
+      background: #282b33; color: #fff; font-size: 0.9rem; cursor: pointer;
+    }
+    button.primary {
+      background: var(--accent); color: #121316; font-weight: 700; border: none;
+      margin-top: 8px; transition: filter 0.15s;
+    }
+    button.primary:hover { filter: brightness(1.1); }
+    .toggle-row { display: flex; gap: 8px; }
+    .toggle-row button { flex: 1; font-size: 0.8rem; padding: 8px; }
+    .toggle-row button.active { border-color: var(--accent); color: var(--accent); background: rgba(245, 158, 11, 0.12); }
+    #viewport { flex: 1; position: relative; }
+    #stats {
+      position: absolute; bottom: 16px; left: 16px; background: rgba(18,19,22,0.85);
+      padding: 10px 14px; border-radius: 8px; font-size: 0.8rem; color: var(--muted);
+      border: 1px solid #2e323b; pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="sidebar">
+    <h1>💡 Lampshade Studio</h1>
+
+    <div class="section-title">1. Base Dimensions (mm)</div>
+    <div class="control-group">
+      <div class="control-header"><span>Height</span><span class="val" id="v-height">180 mm</span></div>
+      <input type="range" id="height" min="60" max="300" step="5" value="180">
+    </div>
+    <div class="control-group">
+      <div class="control-header"><span>Bottom Radius</span><span class="val" id="v-rBot">75 mm</span></div>
+      <input type="range" id="rBot" min="25" max="150" step="1" value="75">
+    </div>
+    <div class="control-group">
+      <div class="control-header"><span>Top Radius</span><span class="val" id="v-rTop">55 mm</span></div>
+      <input type="range" id="rTop" min="20" max="150" step="1" value="55">
+    </div>
+    <div class="control-group">
+      <div class="control-header"><span>Wall Thickness</span><span class="val" id="v-thick">1.6 mm</span></div>
+      <input type="range" id="thick" min="0.8" max="4.0" step="0.2" value="1.6">
+    </div>
+
+    <div class="section-title">2. Profile & Ribs</div>
+    <div class="control-group">
+      <div class="control-header"><span>Profile Curve</span></div>
+      <select id="profile">
+        <option value="belly">Organic Belly (Sine)</option>
+        <option value="hourglass">Hourglass</option>
+        <option value="tulip">Tulip Wave</option>
+        <option value="straight">Straight Cone / Cylinder</option>
+      </select>
+    </div>
+    <div class="control-group">
+      <div class="control-header"><span>Curve Bulge</span><span class="val" id="v-bulge">22 mm</span></div>
+      <input type="range" id="bulge" min="-45" max="60" step="1" value="22">
+    </div>
+    <div class="control-group">
+      <div class="control-header"><span>Rib Count (Fins)</span><span class="val" id="v-ribs">36</span></div>
+      <input type="range" id="ribs" min="0" max="90" step="1" value="36">
+    </div>
+    <div class="control-group">
+      <div class="control-header"><span>Rib Depth</span><span class="val" id="v-ribDepth">6 mm</span></div>
+      <input type="range" id="ribDepth" min="0" max="20" step="0.5" value="6">
+    </div>
+    <div class="control-group">
+      <div class="control-header"><span>Twist Angle</span><span class="val" id="v-twist">120°</span></div>
+      <input type="range" id="twist" min="-360" max="360" step="15" value="120">
+    </div>
+
+    <div class="section-title">3. Socket Mount (Bottom)</div>
+    <div class="control-group">
+      <div class="control-header"><span>Fixture Standard</span></div>
+      <select id="socket">
+        <option value="40">E27 / E26 Standard (40 mm)</option>
+        <option value="28">E14 European Small (28 mm)</option>
+        <option value="0">None (Open Cylinder / Vase Mode)</option>
+      </select>
+    </div>
+    <div class="control-group">
+      <div class="control-header"><span>Support Spokes</span><span class="val" id="v-spokes">4</span></div>
+      <input type="range" id="spokes" min="3" max="8" step="1" value="4">
+    </div>
+
+    <div class="section-title">4. Preview & Export</div>
+    <div class="toggle-row">
+      <button id="btn-lit" class="active">Warm Bulb On</button>
+      <button id="btn-wire">Wireframe</button>
+    </div>
+    <button class="primary" id="btn-export">⬇ Download 3D Printable .STL</button>
+  </div>
+
+  <div id="viewport">
+    <div id="stats">Dimensions: 150 × 150 × 180 mm | Watertight Manifold Mesh</div>
+  </div>
+
+<script>
+const container = document.getElementById('viewport');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x121316);
+
+const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 1, 2000);
+camera.position.set(0, 160, 360);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(container.clientWidth, container.clientHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
+container.appendChild(renderer.domElement);
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 90, 0);
+controls.enableDamping = true;
+
+// Lighting
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.35);
+scene.add(ambientLight);
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+dirLight.position.set(200, 300, 200);
+scene.add(dirLight);
+
+const bulbLight = new THREE.PointLight(0xff9d3b, 2.2, 500);
+bulbLight.position.set(0, 80, 0);
+scene.add(bulbLight);
+
+// Bulb visual helper
+const bulbGeo = new THREE.SphereGeometry(14, 16, 16);
+const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffcf70 });
+const bulbMesh = new THREE.Mesh(bulbGeo, bulbMat);
+bulbMesh.position.copy(bulbLight.position);
+scene.add(bulbMesh);
+
+const grid = new THREE.GridHelper(300, 30, 0x3f4451, 0x22252c);
+scene.add(grid);
+
+let shadeGroup = new THREE.Group();
+scene.add(shadeGroup);
+
+const shadeMaterial = new THREE.MeshStandardMaterial({
+  color: 0xfff5e4,
+  roughness: 0.45,
+  metalness: 0.05,
+  side: THREE.DoubleSide
+});
+
+let isLit = true;
+let isWireframe = false;
+
+function getParams() {
+  return {
+    height: parseFloat(document.getElementById('height').value),
+    rBot: parseFloat(document.getElementById('rBot').value),
+    rTop: parseFloat(document.getElementById('rTop').value),
+    thick: parseFloat(document.getElementById('thick').value),
+    profile: document.getElementById('profile').value,
+    bulge: parseFloat(document.getElementById('bulge').value),
+    ribs: parseInt(document.getElementById('ribs').value),
+    ribDepth: parseFloat(document.getElementById('ribDepth').value),
+    twist: parseFloat(document.getElementById('twist').value) * Math.PI / 180,
+    socketDia: parseFloat(document.getElementById('socket').value),
+    spokes: parseInt(document.getElementById('spokes').value)
+  };
+}
+
+// Compute radius at normalized height v in [0,1] and angle theta
+function evalRadius(v, theta, p) {
+  let baseR = p.rBot * (1 - v) + p.rTop * v;
+  let curveOffset = 0;
+  if (p.profile === 'belly') {
+    curveOffset = p.bulge * Math.sin(v * Math.PI);
+  } else if (p.profile === 'hourglass') {
+    curveOffset = -p.bulge * Math.sin(v * Math.PI);
+  } else if (p.profile === 'tulip') {
+    curveOffset = p.bulge * Math.sin(v * Math.PI * 2) * (1 - v * 0.4);
+  }
+  const twistedAngle = theta + v * p.twist;
+  const ribWave = p.ribs > 0 ? p.ribDepth * 0.5 * Math.sin(p.ribs * twistedAngle) : 0;
+  return Math.max(8, baseR + curveOffset + ribWave);
+}
+
+// Build a watertight revolved tube geometry (from rInnerFunc to rOuterFunc)
+function createWatertightRingMesh(vSegs, uSegs, yBot, yTop, rInnerFn, rOuterFn) {
+  const positions = [];
+  const indices = [];
+
+  for (let iv = 0; iv <= vSegs; iv++) {
+    const v = iv / vSegs;
+    const y = yBot + v * (yTop - yBot);
+    for (let iu = 0; iu < uSegs; iu++) {
+      const u = iu / uSegs;
+      const theta = u * Math.PI * 2;
+      const rOut = rOuterFn(v, theta);
+      const rIn = rInnerFn(v, theta);
+
+      // Outer vertex (index 0 in pair)
+      positions.push(rOut * Math.cos(theta), y, rOut * Math.sin(theta));
+      // Inner vertex (index 1 in pair)
+      positions.push(rIn * Math.cos(theta), y, rIn * Math.sin(theta));
+    }
+  }
+
+  const stride = uSegs * 2;
+  for (let iv = 0; iv < vSegs; iv++) {
+    for (let iu = 0; iu < uSegs; iu++) {
+      const nextU = (iu + 1) % uSegs;
+      const o00 = iv * stride + iu * 2;
+      const i00 = o00 + 1;
+      const o10 = iv * stride + nextU * 2;
+      const i10 = o10 + 1;
+      const o01 = (iv + 1) * stride + iu * 2;
+      const i01 = o01 + 1;
+      const o11 = (iv + 1) * stride + nextU * 2;
+      const i11 = o11 + 1;
+
+      // Outer wall
+      indices.push(o00, o01, o11, o00, o11, o10);
+      // Inner wall
+      indices.push(i00, i11, i01, i00, i10, i11);
+    }
+  }
+
+  // Bottom cap (iv = 0) and Top cap (iv = vSegs)
+  for (let iu = 0; iu < uSegs; iu++) {
+    const nextU = (iu + 1) % uSegs;
+    const bO0 = iu * 2, bI0 = bO0 + 1;
+    const bO1 = nextU * 2, bI1 = bO1 + 1;
+    indices.push(bO0, bO1, bI1, bO0, bI1, bI0);
+
+    const topOffset = vSegs * stride;
+    const tO0 = topOffset + iu * 2, tI0 = tO0 + 1;
+    const tO1 = topOffset + nextU * 2, tI1 = tO1 + 1;
+    indices.push(tO0, tI1, tO1, tO0, tI0, tI1);
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function buildShade() {
+  while (shadeGroup.children.length > 0) {
+    const obj = shadeGroup.children[0];
+    obj.geometry.dispose();
+    shadeGroup.remove(obj);
+  }
+
+  const p = getParams();
+  document.getElementById('v-height').textContent = `${p.height} mm`;
+  document.getElementById('v-rBot').textContent = `${p.rBot} mm`;
+  document.getElementById('v-rTop').textContent = `${p.rTop} mm`;
+  document.getElementById('v-thick').textContent = `${p.thick.toFixed(1)} mm`;
+  document.getElementById('v-bulge').textContent = `${p.bulge} mm`;
+  document.getElementById('v-ribs').textContent = p.ribs;
+  document.getElementById('v-ribDepth').textContent = `${p.ribDepth} mm`;
+  document.getElementById('v-twist').textContent = `${Math.round(p.twist * 180 / Math.PI)}°`;
+  document.getElementById('v-spokes').textContent = p.spokes;
+
+  // 1. Main Shade Wall
+  const uSegs = Math.max(120, p.ribs * 6);
+  const vSegs = 90;
+  const wallGeo = createWatertightRingMesh(
+    vSegs, uSegs, 0, p.height,
+    (v, theta) => evalRadius(v, theta, p) - p.thick,
+    (v, theta) => evalRadius(v, theta, p)
+  );
+  shadeGroup.add(new THREE.Mesh(wallGeo, shadeMaterial));
+
+  // 2. Socket Fitter Ring + Spokes (if enabled)
+  if (p.socketDia > 0) {
+    const fitterH = 5;
+    const hubInnerR = p.socketDia / 2;
+    const hubOuterR = hubInnerR + 5;
+
+    // Center socket ring
+    const hubGeo = createWatertightRingMesh(
+      1, 64, 0, fitterH,
+      () => hubInnerR,
+      () => hubOuterR
+    );
+    shadeGroup.add(new THREE.Mesh(hubGeo, shadeMaterial));
+
+    // Inner base rim inside the shade bottom to anchor spokes cleanly
+    const baseShadeMinR = p.rBot - Math.abs(p.ribDepth * 0.5) - p.thick;
+    const rimOuterR = p.rBot + Math.abs(p.ribDepth * 0.5);
+    const rimInnerR = Math.max(hubOuterR + 2, baseShadeMinR - 3);
+    const rimGeo = createWatertightRingMesh(
+      1, 96, 0, fitterH,
+      (v, theta) => rimInnerR,
+      (v, theta) => evalRadius(0, theta, p)
+    );
+    shadeGroup.add(new THREE.Mesh(rimGeo, shadeMaterial));
+
+    // Radial spokes connecting center ring to outer rim
+    const spokeLen = Math.max(4, rimInnerR - hubOuterR + 4);
+    for (let i = 0; i < p.spokes; i++) {
+      const angle = (i / p.spokes) * Math.PI * 2;
+      const spokeGeo = new THREE.BoxGeometry(spokeLen, fitterH, 6);
+      const midR = hubOuterR - 2 + spokeLen / 2;
+      spokeGeo.translate(midR, fitterH / 2, 0);
+      spokeGeo.rotateY(angle);
+      shadeGroup.add(new THREE.Mesh(spokeGeo, shadeMaterial));
+    }
+  }
+
+  bulbLight.position.set(0, p.height * 0.45, 0);
+  bulbMesh.position.copy(bulbLight.position);
+  controls.target.set(0, p.height * 0.5, 0);
+
+  const maxDia = Math.round(Math.max(p.rBot, p.rTop) * 2 + Math.max(0, p.bulge * 2) + p.ribDepth);
+  document.getElementById('stats').textContent =
+    `Bounding Box: ~${maxDia} × ${maxDia} × ${p.height} mm | Ready for Slicer (Z-Up applied on export)`;
+}
+
+// Export all meshes in shadeGroup as a single ASCII STL (converting Y-up to Z-up for 3D printers)
+function exportSTL() {
+  let stl = 'solid parametric_lampshade\n';
+  const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3();
+  const cb = new THREE.Vector3(), ab = new THREE.Vector3();
+
+  shadeGroup.children.forEach(mesh => {
+    const geo = mesh.geometry;
+    const pos = geo.attributes.position;
+    const idx = geo.index;
+
+    const writeTri = (i1, i2, i3) => {
+      // Convert Three.js (x, y, z) to Slicer Z-up (x, -z, y)
+      vA.set(pos.getX(i1), -pos.getZ(i1), pos.getY(i1));
+      vB.set(pos.getX(i2), -pos.getZ(i2), pos.getY(i2));
+      vC.set(pos.getX(i3), -pos.getZ(i3), pos.getY(i3));
+
+      cb.subVectors(vC, vB);
+      ab.subVectors(vA, vB);
+      cb.cross(ab).normalize();
+
+      stl += `facet normal ${cb.x.toExponential(4)} ${cb.y.toExponential(4)} ${cb.z.toExponential(4)}\n`;
+      stl += `  outer loop\n`;
+      stl += `    vertex ${vA.x.toFixed(4)} ${vA.y.toFixed(4)} ${vA.z.toFixed(4)}\n`;
+      stl += `    vertex ${vB.x.toFixed(4)} ${vB.y.toFixed(4)} ${vB.z.toFixed(4)}\n`;
+      stl += `    vertex ${vC.x.toFixed(4)} ${vC.y.toFixed(4)} ${vC.z.toFixed(4)}\n`;
+      stl += `  endloop\nendfacet\n`;
+    };
+
+    if (idx) {
+      for (let i = 0; i < idx.count; i += 3) {
+        writeTri(idx.getX(i), idx.getX(i + 1), idx.getX(i + 2));
+      }
+    } else {
+      for (let i = 0; i < pos.count; i += 3) {
+        writeTri(i, i + 1, i + 2);
+      }
+    }
+  });
+
+  stl += 'endsolid parametric_lampshade\n';
+  const blob = new Blob([stl], { type: 'application/sla' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'custom_lampshade.stl';
+  link.click();
+}
+
+// Attach UI listeners
+document.querySelectorAll('input, select').forEach(el => {
+  el.addEventListener('input', buildShade);
+});
+
+document.getElementById('btn-lit').addEventListener('click', (e) => {
+  isLit = !isLit;
+  e.target.classList.toggle('active', isLit);
+  bulbLight.intensity = isLit ? 2.2 : 0;
+  bulbMesh.visible = isLit;
+  shadeMaterial.color.setHex(isLit ? 0xfff5e4 : 0xd1d5db);
+});
+
+document.getElementById('btn-wire').addEventListener('click', (e) => {
+  isWireframe = !isWireframe;
+  e.target.classList.toggle('active', isWireframe);
+  shadeMaterial.wireframe = isWireframe;
+});
+
+document.getElementById('btn-export').addEventListener('click', exportSTL);
+
+window.addEventListener('resize', () => {
+  camera.aspect = container.clientWidth / container.clientHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(container.clientWidth, container.clientHeight);
+});
+
+// Initialize
+buildShade();
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
